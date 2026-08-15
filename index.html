@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Our Little Universe 🌙</title>
+
+<!-- ================================================================
+     SETUP GUIDE (padhna zaroori hai, sirf 5 min lagega):
+
+     1. Jao -> https://console.firebase.google.com
+     2. "Add Project" -> koi bhi naam do (e.g. "hum-dono-chat")
+     3. Left sidebar me "Build" -> "Realtime Database" -> "Create Database"
+        -> Start in TEST MODE (dono ke liye chalega, private link hai)
+     4. Project Settings (gear icon) -> "Your apps" -> "</>" (Web app icon)
+        -> App register karo -> firebaseConfig object copy karo
+     5. Neeche "firebaseConfig = {...}" wali line me apna config paste karo
+     6. Ye poora index.html file GitHub repo me daal do -> Settings ->
+        Pages -> Deploy from branch -> main -> save
+     7. Jo link milega wahi tum dono ka private chat site hai 💌
+
+     Note: Test mode ki DB rules 30 din baad expire ho jaati hain.
+     Realtime Database -> Rules tab me jaake ye daal dena (permanent):
+     {
+       "rules": { ".read": true, ".write": true }
+     }
+     (Ye sirf tum dono ke beech hai, link kisi ko mat dena, itna kaafi hai)
+================================================================= -->
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getDatabase, ref, push, onChildAdded, set, onValue
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  // 👇👇👇 YAHAN APNA FIREBASE CONFIG PASTE KARO 👇👇👇
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+  // 👆👆👆 YAHAN TAK 👆👆👆
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const messagesRef = ref(db, "messages");
+  const presenceRef = ref(db, "presence");
+
+  let myName = localStorage.getItem("coupleChatName");
+  const nameModal = document.getElementById("nameModal");
+  const chatWrap = document.getElementById("chatWrap");
+  const nameBtns = document.querySelectorAll(".nameBtn");
+  const customNameInput = document.getElementById("customName");
+  const customNameBtn = document.getElementById("customNameBtn");
+
+  function startChat(name) {
+    myName = name;
+    localStorage.setItem("coupleChatName", name);
+    nameModal.style.display = "none";
+    chatWrap.style.display = "flex";
+    document.getElementById("meLabel").textContent = name;
+    set(ref(db, "presence/" + name), { online: true, ts: Date.now() });
+  }
+
+  if (myName) {
+    startChat(myName);
+  }
+
+  nameBtns.forEach(btn => {
+    btn.addEventListener("click", () => startChat(btn.dataset.name));
+  });
+  customNameBtn.addEventListener("click", () => {
+    const v = customNameInput.value.trim();
+    if (v) startChat(v);
+  });
+
+  // presence (who's online)
+  onValue(presenceRef, (snap) => {
+    const data = snap.val() || {};
+    const others = Object.keys(data).filter(n => n !== myName);
+    const statusEl = document.getElementById("statusText");
+    if (others.length && data[others[0]].online) {
+      statusEl.textContent = others[0] + " is online 💗";
+      statusEl.classList.add("online");
+    } else {
+      statusEl.textContent = "waiting for them...";
+      statusEl.classList.remove("online");
+    }
+  });
+
+  // sending
+  const input = document.getElementById("msgInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const messagesEl = document.getElementById("messages");
+
+  function sendMessage() {
+    const text = input.value.trim();
+    if (!text || !myName) return;
+    push(messagesRef, {
+      sender: myName,
+      text: text,
+      time: Date.now()
+    });
+    input.value = "";
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  // receiving
+  onChildAdded(messagesRef, (snap) => {
+    const msg = snap.val();
+    const bubble = document.createElement("div");
+    const mine = msg.sender === myName;
+    bubble.className = "bubble " + (mine ? "mine" : "theirs");
+
+    const senderTag = document.createElement("div");
+    senderTag.className = "sender";
+    senderTag.textContent = msg.sender;
+
+    const textEl = document.createElement("div");
+    textEl.className = "text";
+    textEl.textContent = msg.text;
+
+    const timeEl = document.createElement("div");
+    timeEl.className = "time";
+    const d = new Date(msg.time);
+    timeEl.textContent = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    bubble.appendChild(senderTag);
+    bubble.appendChild(textEl);
+    bubble.appendChild(timeEl);
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (myName) set(ref(db, "presence/" + myName), { online: false, ts: Date.now() });
+  });
+</script>
+
+<style>
+  :root{
+    --bg-deep: #170f26;
+    --bg-panel: #211534;
+    --lavender: #c9b6e4;
+    --coral: #ff8fa3;
+    --gold: #f4c95d;
+    --cream: #f4ecf7;
+    --muted: #9c8bb5;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(ellipse at top, #241839 0%, var(--bg-deep) 60%, #0d0817 100%);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--cream);
+    overflow: hidden;
+  }
+
+  .stars{
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+  }
+  .star{
+    position:absolute; width:3px; height:3px; border-radius:50%;
+    background: var(--gold); opacity:0.6;
+    animation: twinkle 3.5s ease-in-out infinite;
+  }
+  @keyframes twinkle{
+    0%,100%{ opacity:0.2; transform:scale(1); }
+    50%{ opacity:0.9; transform:scale(1.6); }
+  }
+
+  h1, h2, .brand{
+    font-family: Georgia, 'Times New Roman', serif;
+    letter-spacing: 0.02em;
+  }
+
+  #nameModal{
+    position:relative; z-index:2;
+    height:100%; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; text-align:center; padding:24px;
+  }
+  #nameModal .brand{
+    font-size: 2rem; margin-bottom:6px; color: var(--cream);
+  }
+  #nameModal p{ color: var(--muted); margin-top:0; margin-bottom: 28px; }
+  .nameBtn{
+    background: linear-gradient(135deg, var(--coral), #d97ba0);
+    border:none; color:white; padding:14px 30px; margin:6px;
+    border-radius: 999px; font-size:1rem; cursor:pointer;
+    box-shadow: 0 6px 20px rgba(255,143,163,0.25);
+    transition: transform 0.15s ease;
+  }
+  .nameBtn:hover{ transform: translateY(-2px); }
+  .customRow{
+    margin-top:20px; display:flex; gap:8px;
+  }
+  #customName{
+    background: var(--bg-panel); border:1px solid #3a2a55; color:var(--cream);
+    padding:12px 16px; border-radius:999px; outline:none; font-size:0.95rem;
+    width:200px;
+  }
+  #customNameBtn{
+    background: var(--bg-panel); border:1px solid var(--lavender); color:var(--lavender);
+    padding:12px 18px; border-radius:999px; cursor:pointer;
+  }
+
+  #chatWrap{
+    display:none; flex-direction:column; height:100%;
+    position:relative; z-index:2;
+    max-width: 560px; margin: 0 auto;
+    background: rgba(33,21,52,0.55);
+    backdrop-filter: blur(6px);
+    border-left: 1px solid #3a2a55;
+    border-right: 1px solid #3a2a55;
+  }
+
+  header{
+    padding: 18px 20px; border-bottom:1px solid #3a2a55;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  header .brand{ font-size:1.3rem; }
+  header .brand::before{ content:"🌙 "; }
+  #statusText{
+    font-size:0.8rem; color: var(--muted);
+  }
+  #statusText.online{ color: var(--coral); }
+  #meLabel{
+    font-size:0.75rem; color: var(--gold); border:1px solid var(--gold);
+    padding:3px 10px; border-radius:999px;
+  }
+
+  #messages{
+    flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px;
+  }
+  #messages::-webkit-scrollbar{ width:6px; }
+  #messages::-webkit-scrollbar-thumb{ background:#3a2a55; border-radius:4px; }
+
+  .bubble{
+    max-width:72%; padding:10px 14px; border-radius:18px; position:relative;
+    animation: pop 0.2s ease;
+  }
+  @keyframes pop{ from{ transform: scale(0.9); opacity:0; } to{ transform:scale(1); opacity:1; } }
+
+  .bubble .sender{ font-size:0.68rem; opacity:0.7; margin-bottom:2px; }
+  .bubble .text{ font-size:0.95rem; line-height:1.4; word-wrap:break-word; }
+  .bubble .time{ font-size:0.62rem; opacity:0.5; margin-top:4px; text-align:right; }
+
+  .bubble.mine{
+    align-self:flex-end;
+    background: linear-gradient(135deg, var(--coral), #d97ba0);
+    color:white; border-bottom-right-radius:4px;
+  }
+  .bubble.theirs{
+    align-self:flex-start;
+    background: var(--bg-panel); border:1px solid #3a2a55;
+    color: var(--cream); border-bottom-left-radius:4px;
+  }
+
+  footer{
+    padding:16px 20px; border-top:1px solid #3a2a55; display:flex; gap:10px;
+  }
+  #msgInput{
+    flex:1; background: var(--bg-panel); border:1px solid #3a2a55; color:var(--cream);
+    padding:12px 16px; border-radius:999px; outline:none; font-size:0.95rem;
+  }
+  #msgInput:focus{ border-color: var(--coral); }
+  #sendBtn{
+    background: linear-gradient(135deg, var(--gold), #e0a93f); border:none;
+    color:#2b1b2e; width:44px; height:44px; border-radius:50%; cursor:pointer;
+    font-size:1.1rem;
+  }
+
+  @media (max-width:600px){
+    #chatWrap{ max-width:100%; border-left:none; border-right:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stars" id="starsField"></div>
+
+<div id="nameModal">
+  <div class="brand">Our Little Universe 🌙</div>
+  <p>Tum kaun ho?</p>
+  <div>
+    <button class="nameBtn" data-name="Me">I'm Me 💫</button>
+    <button class="nameBtn" data-name="You">I'm You 💖</button>
+  </div>
+  <div class="customRow">
+    <input id="customName" type="text" placeholder="ya apna naam likho...">
+    <button id="customNameBtn">Enter</button>
+  </div>
+</div>
+
+<div id="chatWrap">
+  <header>
+    <div>
+      <div class="brand">Our Little Universe</div>
+      <div id="statusText">connecting...</div>
+    </div>
+    <div id="meLabel"></div>
+  </header>
+
+  <div id="messages"></div>
+
+  <footer>
+    <input id="msgInput" type="text" placeholder="Kuch likho unke liye...">
+    <button id="sendBtn">➤</button>
+  </footer>
+</div>
+
+<script>
+  const field = document.getElementById("starsField");
+  for(let i=0;i<40;i++){
+    const s = document.createElement("div");
+    s.className = "star";
+    s.style.left = Math.random()*100 + "%";
+    s.style.top = Math.random()*100 + "%";
+    s.style.animationDelay = (Math.random()*3) + "s";
+    field.appendChild(s);
+  }
+</script>
+
+</body>
+</html>
